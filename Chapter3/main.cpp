@@ -5,11 +5,12 @@
 #include<dxgi1_6.h>
 #include<vector>
 #include<string>
-#ifdef _DEBUG
-#include<iostream>
-#endif
 
+#define HInstance() GetModuleHandle(NULL)
+#define MAX_NAME_STRING 256
 
+/*オブジェクトファイルに、リンカでリンクするライブラリの名前を記述するもの。
+だそうです。*/
 #pragma comment(lib,"d3d12.lib")
 #pragma comment(lib,"dxgi.lib")
 
@@ -17,14 +18,7 @@
 ///@param format フォーマット(%dとか%fとかの)
 ///@param 可変長引数
 ///@remarksこの関数はデバッグ用です。デバッグ時にしか動作しません
-void DebugOutputFormatString(const char* format , ...) {
-#ifdef _DEBUG
-	va_list valist;
-	va_start(valist, format);
-	vprintf(format, valist);
-	va_end(valist);
-#endif
-}
+
 
 //面倒ですが、ウィンドウプロシージャは必須なので書いておきます
 LRESULT WindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
@@ -45,51 +39,40 @@ ID3D12GraphicsCommandList* cmdList_ = nullptr;
 ID3D12CommandQueue* cmdQueue_ = nullptr;
 IDXGISwapChain4* swapchain_ = nullptr;
 
-void EnableDebugLayer(){
-	ID3D12Debug* debugLayer=nullptr;
-	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugLayer)))) {
-		debugLayer->EnableDebugLayer();
-		debugLayer->Release();
-	}
-}
+/*LP	＝ *（ポインタ）
+C	＝ const
+TSTR	＝ TCHAR
+STR	＝ char
+WSTR	＝ WCHAR*/
 
-#ifdef _DEBUG
-int main() {
-#else
+/* ------------------------------------------------------ */
+/*  Global Variables                                      */
+/* ------------------------------------------------------ */
+#pragma region GlobalVariables
+WNDCLASSEX w = {};
+HWND hwnd;
+WCHAR			WindowClass[MAX_NAME_STRING];
+WCHAR			WindowTitle[MAX_NAME_STRING];
+INT				WindowWidth;
+INT				WindowHeight;
+#pragma endregion
+/* ------------------------------------------------------ */
+
+#pragma region Pre-Declarations
+void InitalizeVariables();
+void CreateWindowClass();
+void InitializeWindow();
+void MessageLoop();
+#pragma endregion
+
 #include<Windows.h>
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
-#endif
-	DebugOutputFormatString( "Show window test.");
-	HINSTANCE hInst = GetModuleHandle(nullptr);
-	//ウィンドウクラス生成＆登録
-	WNDCLASSEX w = {};
-	w.cbSize = sizeof(WNDCLASSEX);
-	w.lpfnWndProc = (WNDPROC)WindowProcedure;//コールバック関数の指定
-	w.lpszClassName = _T("DirectXTest");//アプリケーションクラス名(適当でいいです)
-	w.hInstance = GetModuleHandle(0);//ハンドルの取得
-	RegisterClassEx(&w);//アプリケーションクラス(こういうの作るからよろしくってOSに予告する)
 
-	RECT wrc = { 0,0, window_width, window_height};//ウィンドウサイズを決める
-	AdjustWindowRect(&wrc, WS_OVERLAPPEDWINDOW, false);//ウィンドウのサイズはちょっと面倒なので関数を使って補正する
-	//ウィンドウオブジェクトの生成
-	HWND hwnd = CreateWindow(w.lpszClassName,//クラス名指定
-		_T("DX12テスト"),//タイトルバーの文字
-		WS_OVERLAPPEDWINDOW,//タイトルバーと境界線があるウィンドウです
-		CW_USEDEFAULT,//表示X座標はOSにお任せします
-		CW_USEDEFAULT,//表示Y座標はOSにお任せします
-		wrc.right - wrc.left,//ウィンドウ幅
-		wrc.bottom - wrc.top,//ウィンドウ高
-		nullptr,//親ウィンドウハンドル
-		nullptr,//メニューハンドル
-		w.hInstance,//呼び出しアプリケーションハンドル
-		nullptr);//追加パラメータ
+	InitalizeVariables();
+	CreateWindowClass();
+	InitializeWindow();
+	
 
-#ifdef _DEBUG
-	//デバッグレイヤーをオンに
-	//デバイス生成時前にやっておかないと、デバイス生成後にやると
-	//デバイスがロスとしてしまうので注意
-	EnableDebugLayer();
-#endif
 	//DirectX12まわり初期化
 	//フィーチャレベル列挙
 	D3D_FEATURE_LEVEL levels[] = {
@@ -139,8 +122,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	result = dev_->CreateCommandQueue(&cmdQueueDesc, IID_PPV_ARGS(&cmdQueue_));//コマンドキュー生成
 
 	DXGI_SWAP_CHAIN_DESC1 swapchainDesc = {};
-	swapchainDesc.Width = window_width;
-	swapchainDesc.Height = window_height;
+	swapchainDesc.Width = WindowWidth;
+	swapchainDesc.Height = WindowHeight;
 	swapchainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 	swapchainDesc.Stereo = false;
 	swapchainDesc.SampleDesc.Count = 1;
@@ -182,6 +165,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	ShowWindow(hwnd, SW_SHOW);//ウィンドウ表示
 
+	
 	MSG msg = {};
 	while (true) {
 
@@ -248,4 +232,40 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	//もうクラス使わんから登録解除してや
 	UnregisterClass(w.lpszClassName, w.hInstance);	
 	return 0;
+}
+
+VOID InitalizeVariables() {
+	wcscpy_s(WindowClass, TEXT("TutorialOneClass"));
+	wcscpy_s(WindowTitle, L"name");
+	WindowWidth  = 1280;
+	WindowHeight = 720;
+
+
+}
+
+
+
+void CreateWindowClass() {
+	w.cbSize = sizeof(WNDCLASSEX);
+	w.lpfnWndProc = WindowProcedure;//コールバック関数の指定
+	w.lpszClassName = WindowClass;//アプリケーションクラス名(適当でいいです)
+	w.hInstance = HInstance();//ハンドルの取得
+	RegisterClassEx(&w);//アプリケーションクラス(こういうの作るからよろしくってOSに予告する)
+}
+
+void InitializeWindow() {
+	RECT wrc = { 0,0, WindowWidth, WindowHeight };//ウィンドウサイズを決める
+	AdjustWindowRect(&wrc, WS_OVERLAPPEDWINDOW, false);//ウィンドウのサイズはちょっと面倒なので関数を使って補正する
+	//ウィンドウオブジェクトの生成
+	hwnd = CreateWindow(WindowClass,//クラス名指定
+		_T("DX12テスト"),//タイトルバーの文字
+		WS_OVERLAPPEDWINDOW,//タイトルバーと境界線があるウィンドウです
+		CW_USEDEFAULT,//表示X座標はOSにお任せします
+		CW_USEDEFAULT,//表示Y座標はOSにお任せします
+		wrc.right - wrc.left,//ウィンドウ幅
+		wrc.bottom - wrc.top,//ウィンドウ高
+		nullptr,//親ウィンドウハンドル
+		nullptr,//メニューハンドル
+		HInstance(),//呼び出しアプリケーションハンドル
+		nullptr);//追加パラメータ
 }
